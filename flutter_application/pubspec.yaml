@@ -1,0 +1,31 @@
+name: flutter_application_1
+
+environment:
+  sdk: ">=3.7.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_screenutil: ^5.9.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  assets:
+    - assets/icons/
+    - assets/images/gf.jpg
+    - assets/images/pogi.jpg
+    - assets/images/gff.jpg
+    - assets/images/helo.jpg
+    - assets/images/hii.jpg
+  fonts:
+    - family: Klavika
+      fonts:
+        - asset: assets/fonts/klavikaBoldBold.otf
+    - family: Frutiger
+      fonts:
+        - asset: assets/fonts/FrutigerLTStd-Roman.otf
+  uses-material-design: true
