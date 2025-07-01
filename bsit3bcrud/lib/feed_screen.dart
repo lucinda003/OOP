@@ -3,6 +3,10 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'api_service.dart' as api_service;
 import 'package:logger/logger.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class FeedScreen extends StatefulWidget {
   final Map<String, dynamic>? uploadedImageData;
@@ -22,22 +26,15 @@ class _FeedScreenState extends State<FeedScreen> {
     super.initState();
     // Add uploaded image data if provided
     if (widget.uploadedImageData != null) {
-      // Ensure the ID is treated as a string (UUID)
-      if (widget.uploadedImageData!.containsKey('id')) {
-        // Create a mutable map to ensure we can work with the ID
-        final mutableImageData = Map<String, dynamic>.from(
-          widget.uploadedImageData!,
-        );
+      // Always add uploaded image data, even if it doesn't have an 'id'
+      final mutableImageData = Map<String, dynamic>.from(
+        widget.uploadedImageData!,
+      );
+      if (mutableImageData.containsKey('id')) {
         mutableImageData['id'] = mutableImageData['id'].toString();
-        images.add(mutableImageData);
-        logger.d(
-          'Added uploaded image to list with ID: ${mutableImageData['id']}',
-        );
-      } else {
-        logger.w(
-          'Uploaded image data missing ID field: ${widget.uploadedImageData}',
-        );
       }
+      images.insert(0, mutableImageData); // Insert at the top
+      logger.d('Added uploaded image to list: ${mutableImageData.toString()}');
     }
     fetchImages(); // Fetch other images from the server
   }
@@ -158,6 +155,119 @@ class _FeedScreenState extends State<FeedScreen> {
     }
   }
 
+  Future<void> _showEditDialog(Map<String, dynamic> img) async {
+    final titleController = TextEditingController(text: img['title'] ?? '');
+    final subtitleController = TextEditingController(
+      text: img['subtitle'] ?? '',
+    );
+    File? newImageFile;
+    Uint8List? newWebImageBytes;
+    final picker = ImagePicker();
+
+    Future<void> pickNewImage() async {
+      final XFile? pickedFile = await picker.pickImage(
+        source: ImageSource.gallery,
+      );
+      if (pickedFile != null) {
+        if (kIsWeb) {
+          newWebImageBytes = await pickedFile.readAsBytes();
+        } else {
+          newImageFile = File(pickedFile.path);
+        }
+      }
+    }
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('Edit Post'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: titleController,
+                      decoration: const InputDecoration(labelText: 'Title'),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: subtitleController,
+                      decoration: const InputDecoration(labelText: 'Subtitle'),
+                    ),
+                    const SizedBox(height: 10),
+                    if (newWebImageBytes != null)
+                      Image.memory(newWebImageBytes!, height: 120)
+                    else if (newImageFile != null)
+                      Image.file(newImageFile!, height: 120)
+                    else if (img['url'] != null)
+                      Image.network(img['url'], height: 120),
+                    TextButton.icon(
+                      onPressed: () async {
+                        await pickNewImage();
+                        setState(() {});
+                      },
+                      icon: const Icon(Icons.image),
+                      label: const Text('Change Image'),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final id = img['id'].toString();
+                    var uri = Uri.parse('http://localhost:3000/images/$id');
+                    var request = http.MultipartRequest('PUT', uri);
+                    request.fields['title'] = titleController.text;
+                    request.fields['subtitle'] = subtitleController.text;
+
+                    if (newWebImageBytes != null) {
+                      request.files.add(
+                        http.MultipartFile.fromBytes(
+                          'image',
+                          newWebImageBytes!,
+                          filename: 'upload.png',
+                        ),
+                      );
+                    } else if (newImageFile != null) {
+                      request.files.add(
+                        await http.MultipartFile.fromPath(
+                          'image',
+                          newImageFile!.path,
+                        ),
+                      );
+                    }
+
+                    var response = await request.send();
+                    if (response.statusCode == 200) {
+                      Navigator.of(context).pop();
+                      await fetchImages();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Post updated!')),
+                      );
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Failed to update post.')),
+                      );
+                    }
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -179,7 +289,58 @@ class _FeedScreenState extends State<FeedScreen> {
                   return Card(
                     margin: const EdgeInsets.all(8),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (img['title'] != null &&
+                                      img['title'].toString().isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(
+                                        top: 12,
+                                        left: 12,
+                                        right: 12,
+                                        bottom: 2,
+                                      ),
+                                      child: Text(
+                                        img['title'],
+                                        style: const TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  if (img['subtitle'] != null &&
+                                      img['subtitle'].toString().isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(
+                                        left: 12,
+                                        right: 12,
+                                        bottom: 8,
+                                      ),
+                                      child: Text(
+                                        img['subtitle'],
+                                        style: const TextStyle(
+                                          fontSize: 15,
+                                          color: Colors.grey,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.edit, color: Colors.blue),
+                              tooltip: 'Edit',
+                              onPressed: () => _showEditDialog(img),
+                            ),
+                          ],
+                        ),
                         Stack(
                           children: [
                             Image.network(img['url']),

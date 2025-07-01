@@ -61,10 +61,14 @@ pool.getConnection((err, connection) => {
     )
   `);
 
+  // NOTE: If you already have the table, run this SQL in your database to add columns:
+  // ALTER TABLE feed_images ADD COLUMN title VARCHAR(255) NOT NULL DEFAULT '', ADD COLUMN subtitle VARCHAR(255) NOT NULL DEFAULT '';
   connection.query(`
     CREATE TABLE IF NOT EXISTS feed_images (
       id INT AUTO_INCREMENT PRIMARY KEY,
       image_path VARCHAR(255) NOT NULL,
+      title VARCHAR(255) NOT NULL DEFAULT '',
+      subtitle VARCHAR(255) NOT NULL DEFAULT '',
       uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `, (err) => {
@@ -196,7 +200,7 @@ app.delete("/users/:id", (req, res) => {
 
 // ---------------- IMAGES ROUTES ----------------
 
-// Upload Image to feed_images
+// Upload Image to feed_images with title and subtitle
 app.post("/upload", upload.single('image'), (req, res) => {
   console.log('Upload endpoint hit');
   if (!req.file) {
@@ -205,23 +209,30 @@ app.post("/upload", upload.single('image'), (req, res) => {
   }
 
   const imagePath = req.file.filename;
+  const title = req.body.title || '';
+  const subtitle = req.body.subtitle || '';
 
   pool.query(
-    "INSERT INTO feed_images (image_path) VALUES (?)",
-    [imagePath],
+    "INSERT INTO feed_images (image_path, title, subtitle) VALUES (?, ?, ?)",
+    [imagePath, title, subtitle],
     (err, results) => {
       if (err) {
         console.error("Image insert error:", err);
         return res.status(500).json({ error: "Database error" });
       }
-      res.status(201).json({ message: "Image uploaded", image_path: imagePath });
+      res.status(201).json({ 
+        message: "Image uploaded", 
+        image_path: imagePath,
+        title,
+        subtitle
+      });
     }
   );
 });
 
-// Get All Uploaded Feed Images
+// Get All Uploaded Feed Images (with title and subtitle)
 app.get("/images", (_, res) => {
-  pool.query("SELECT id, image_path, uploaded_at FROM feed_images ORDER BY uploaded_at DESC", (err, results) => {
+  pool.query("SELECT id, image_path, title, subtitle, uploaded_at FROM feed_images ORDER BY uploaded_at DESC", (err, results) => {
     if (err) {
       console.error("Images fetch error:", err);
       return res.status(500).json({ error: "Database error" });
@@ -230,6 +241,8 @@ app.get("/images", (_, res) => {
     const images = results.map(img => ({
       id: img.id,
       url: `http://localhost:3000/uploads/${img.image_path}`,
+      title: img.title,
+      subtitle: img.subtitle,
       uploaded_at: img.uploaded_at
     }));
 

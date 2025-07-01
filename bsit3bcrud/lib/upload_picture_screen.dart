@@ -20,6 +20,10 @@ class UploadPictureScreenState extends State<UploadPictureScreen> {
   final ImagePicker _picker = ImagePicker();
   final Logger logger = Logger();
 
+  // Controllers for title and subtitle
+  final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _subtitleController = TextEditingController();
+
   // Method to pick image from gallery or camera
   Future<void> _pickImage() async {
     final XFile? pickedFile = await _picker.pickImage(
@@ -56,6 +60,9 @@ class UploadPictureScreenState extends State<UploadPictureScreen> {
           filename: 'upload.png',
         ),
       );
+      // Add title and subtitle fields
+      request.fields['title'] = _titleController.text;
+      request.fields['subtitle'] = _subtitleController.text;
 
       try {
         logger.d('Sending web upload request');
@@ -106,6 +113,9 @@ class UploadPictureScreenState extends State<UploadPictureScreen> {
       request.files.add(
         await http.MultipartFile.fromPath('image', _image!.path),
       );
+      // Add title and subtitle fields
+      request.fields['title'] = _titleController.text;
+      request.fields['subtitle'] = _subtitleController.text;
 
       try {
         logger.d('Sending mobile/desktop upload request');
@@ -169,6 +179,56 @@ class UploadPictureScreenState extends State<UploadPictureScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              // Title input
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24.0,
+                  vertical: 8.0,
+                ),
+                child: TextField(
+                  controller: _titleController,
+                  decoration: const InputDecoration(
+                    labelText: 'Title',
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+              // Subtitle input
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24.0,
+                  vertical: 8.0,
+                ),
+                child: TextField(
+                  controller: _subtitleController,
+                  decoration: const InputDecoration(
+                    labelText: 'Subtitle',
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+              // Display title and subtitle above the image
+              if (_titleController.text.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8.0),
+                  child: Text(
+                    _titleController.text,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              if (_subtitleController.text.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4.0, bottom: 8.0),
+                  child: Text(
+                    _subtitleController.text,
+                    style: const TextStyle(fontSize: 16, color: Colors.grey),
+                  ),
+                ),
               if (kIsWeb)
                 _webImageBytes != null
                     ? Image.memory(
